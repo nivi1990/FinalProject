@@ -1,0 +1,236 @@
+---
+title: "Geo Spatial Analysis"
+output: html_document
+---
+
+## Used packages 
+
+**1.Leaflet**
+
+**2.ggmap**
+
+## Libraries in use
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+library(ggmap)
+library(leaflet)
+
+```
+
+## Load CSV file
+
+```{r}
+#CleanedListings <- read.csv("CleanedListings.csv")
+CleanedListings <- readRDS("data.Rda")
+
+str(CleanedListings)
+```
+## Load Chicago Map using qmap function.
+
+```{r}
+ChicagoMap<-qmap("Chicago", zoom = 14)
+ChicagoMap
+```
+
+#GGPLOTS on Map
+
+**Basic Scatter Plot of listings**
+
+Every point onthe map is a listing.We can cleary see the density of listing is more near the main city
+```{r}
+ChicagoMap+geom_point(aes(x = CleanedListings$longitude, y = CleanedListings$latitude), data = CleanedListings)+ggtitle("Map Of Chicago")
+```
+
+
+
+
+
+
+
+**Scatter Plot for different room types available**
+
+
+We can see through the graph that listings with room type Entire Home/apartments are more in number as compared to private rooms and shared rooms.One reason for apartments being more in number is because most of the listings are clustered near the main city area where number of apartments will definately be more then independent houses (a part of which will be private room).Apartments are also more preferred by guests with respect to privacy and amenities available.
+
+```{r}
+ChicagoMap+
+geom_point(aes(x = CleanedListings$longitude, y = CleanedListings$latitude, colour = CleanedListings$room_type),
+              data = CleanedListings)+
+ggtitle("Room Types availability IN Chicago")
+```
+
+
+
+
+**Refined map according to room type**
+
+We used a size dimension to make the above graph more interprettable.Its clearly seen that the room type which is least in number is shown as bigger circles on the map to make it more readable."Shared Room Type" pictured as Big Blue circles.
+
+
+
+```{r}
+
+ChicagoMap +
+geom_point(aes(x = CleanedListings$longitude, y = CleanedListings$latitude,
+colour = room_type, size = room_type),
+data = CleanedListings)
+
+```
+
+**Expensive prices**
+
+This plot shows the listings according to the price . Price is multiplied by the cluster size and then shown on map so costlier the listing, bigger the circle.
+```{r}
+
+CleanedListings$price <- as.numeric(gsub("[\\$,]", "", CleanedListings$price))
+CgClusterSize <- 0.005
+ChicagoMap+ geom_point(aes(x=longitude, y=latitude,colour = CleanedListings$neighbourhood), 
+  data=CleanedListings, col="REd", alpha=0.5,
+  size=CleanedListings$price*CgClusterSize) +
+  scale_size_continuous(range=range(CleanedListings$price)) +
+  ggtitle("Expensiveness of Airbnb Properties in Chicago")
+
+```
+
+**Density Distribution Map**
+
+Areas with higher number of listings have more number of lines and are darker in colour.This is an enhanced version of scatter plot to show density of listings. Since there are no points , it is easy to interpret the highly dense areas with just the colour and circle density in area.
+
+
+```{r}
+
+ChicagoMap  + geom_density2d(data = CleanedListings, aes(x = longitude, y =latitude), 
+  size = 0.3)+
+stat_density2d(data = CleanedListings, aes(x = longitude, y = latitude, 
+fill = ..level.., alpha = ..level..), size = 0.001, 
+bins = 16, geom = "polygon") + 
+scale_fill_gradient(low = "purple", high = "black",name = "Density") + 
+scale_alpha(range = c(0.05,0.1), guide = FALSE) +
+ggtitle("Density Distribution of Airbnb Properties in CHicago")
+
+```
+
+
+
+
+
+## Leaflet Package Maps
+
+**Listings according to Reviews**
+
+
+This package allows Zooming of maps .This Map to show listings with higher number of reviews[Reviews >300].We can use Circle markers and and if else logic to mark areas with higher number of reviews .Red hollow circles in below map show such areas.
+
+
+```{r}
+
+leaflet(data = CleanedListings) %>%  addProviderTiles("Stamen.Watercolor") %>%
+ addProviderTiles("Stamen.TonerHybrid") %>%
+  addCircleMarkers(~longitude, ~latitude, radius = ifelse(CleanedListings$number_of_reviews > 300, 20, 0.1),
+                   color = ifelse(CleanedListings$number_of_reviews > 300, "red", "purple"),
+                   fillOpacity = 0.1)
+```
+
+
+**Map to show listings with higher prices[Price >$3000]**
+
+
+Used leaflet library . We can use Circle markers and and if else logic to mark areas with highest prices(in this case more then $3000) .Red hollow circles in below map show such areas.
+
+
+```{r}
+leaflet(data = CleanedListings) %>%  addProviderTiles("Stamen.Watercolor") %>%
+ addProviderTiles("Stamen.TonerHybrid") %>%
+  addCircleMarkers(~longitude, ~latitude, radius = ifelse(CleanedListings$price > 3000, 20, 0.1),
+                   color = ifelse(CleanedListings$price > 3000, "red", "green"),
+                   fillOpacity = 0.4)
+```
+
+
+**Highlighting Density according to neighbourhood**
+
+
+Used leaflet function with "DarkMatter" as basemaps to highlight listings according to neighbourhood.The colour palatte used in this map is "topo.colors(25)" that makes it better to interpret on black background.
+
+
+
+```{r}
+factpal <- colorFactor(topo.colors(25), CleanedListings$neighbourhood_cleansed)
+
+popup <- paste0("<strong>'hood: </strong>", CleanedListings$neighbourhood_cleansed)
+
+
+leaflet(CleanedListings) %>% addProviderTiles("CartoDB.DarkMatter") %>%
+  addCircleMarkers(
+    color = ~factpal(neighbourhood_cleansed),
+    stroke = FALSE, fillOpacity = 0.5, radius = 1.2,
+    popup = ~popup
+  )%>%addLegend(pal = factpal, values = ~CleanedListings$neighbourhood_cleansed, opacity = 1, title="Density Vs Neighbourhood")
+```
+
+
+**Super hosts in Chicago**
+
+This map shows Super hosts and Not Super hosts on map.The number of non-super hosts are more then Super hosts as it depends on lot of factors like number of reviews, response time, cancellation policies , instant bookings availability etc.Provided a host fulfills all these criterias, he would count as a super host hence the number of super hosts so far in the listings might be less.
+
+
+```{r}
+ChicagoMap+
+  geom_point(data=CleanedListings,
+             aes(x=longitude,y=latitude,color=host_is_superhost),
+             size=4,alpha=.7)+scale_colour_gradient(low = "orange")+ggtitle("Super Hosts in Chicago")
+```
+
+
+**Instant Bookings available**
+
+Map to show areas where instant bookings are available.Again the number of listings with easy booking are lesser is number. 
+```{r}
+ChicagoMap+
+  geom_point(data=CleanedListings,
+             aes(x=longitude,y=latitude,color=instant_bookable),
+             size=4,alpha=.7)+scale_colour_gradient(low = "Green")+ggtitle("Instant Bookings")
+```
+
+**Cancellation Policies**
+
+This map shows listings on map marked according to cancellation policies.We notice approximately equal number of listings for flexible and strict with slightly lesser for moderate type.
+
+
+```{r}
+ChicagoMap +
+geom_point(aes(x = CleanedListings$longitude, y = CleanedListings$latitude,
+colour = cancellation_policy, size = cancellation_policy),
+data = CleanedListings)+ggtitle("Cancellation Policies")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
